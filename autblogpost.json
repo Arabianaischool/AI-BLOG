@@ -1,0 +1,206 @@
+{
+  "name": "Arabian AI school Channel autoblog AI",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "daysInterval": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "36bfa350-6bca-467d-bd0c-3c878232dd70",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://newsdata.io/api/1/news",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "pub_15e51949507f4ae3883c4c850f4ef4b7"
+            },
+            {
+              "name": "category",
+              "value": "sports"
+            },
+            {
+              "name": "language",
+              "value": "en"
+            },
+            {
+              "name": "size",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "4d611962-6c7d-40b0-99a7-3309d384b3e9",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-1.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-1.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "you are an expert blog writer who creates engaging, original content. you excel writing top articles.",
+              "role": "model"
+            },
+            {
+              "content": "=Write a completely original blog post about this news:\nTitle: {{ $json.results[0].title }}\nDescription:{{ $json.results[0].description }}\n\nRequirements:\n- Create a unique and engaging title\n- Write EXACTLY 5 separate paragraphs (each in its own <p> tag)\n- Include your own analysis and perspective\n- Do NOT copy phrases from the original source\n- End with a thoughtful conclusion\n\nFormat the response as clean JSON without backticks:\n{\n  \"title\": \"Your creative blog title\",\n  \"content\": \"The full blog post content with HTML formatting including separate <p> tags for each paragraph\"\n}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "5f49d170-5d2f-4325-b582-a8dfe4ab2ecd",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "tjSECSnXoRSsb1rB",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Grab model output (works for OpenAI + Gemini) ---\nconst j = items[0].json;\n\nlet text =\n  j?.message?.content ??                              // OpenAI (some n8n nodes)\n  j?.choices?.[0]?.message?.content ??                // OpenAI (raw API shape)\n  j?.content?.parts?.[0]?.text ??                     // Gemini common shape\n  j?.candidates?.[0]?.content?.parts?.[0]?.text ??    // Gemini alternative\n  null;\n\nif (!text) {\n  throw new Error('Model output not found on known paths.');\n}\n\ntext = String(text).trim();\n\n// --- Strip code fences if present ---\nif (text.startsWith('```')) {\n  // remove leading ```json (or ```), and trailing ```\n  text = text.replace(/^```[a-z]*\\n?/i, '').replace(/```$/, '').trim();\n}\n\n// --- Extract the first JSON object from the string safely ---\nconst start = text.indexOf('{');\nconst end   = text.lastIndexOf('}');\nif (start === -1 || end === -1 || end <= start) {\n  throw new Error('No JSON object found in model output:\\n' + text.slice(0, 400));\n}\nconst jsonStr = text.slice(start, end + 1);\n\n// --- Parse JSON ---\nlet parsed;\ntry {\n  parsed = JSON.parse(jsonStr);\n} catch (e) {\n  // try a softer parse if there are stray newlines/tabs\n  parsed = JSON.parse(jsonStr.replace(/\\n/g, ' ').replace(/\\t/g, ' '));\n}\n\n// --- Guards ---\nif (!parsed.title || !parsed.content) {\n  throw new Error('Parsed JSON missing title/content keys. Got keys: ' + Object.keys(parsed).join(', '));\n}\n\n// --- Output for next nodes ---\nreturn [\n  {\n    json: {\n      title: parsed.title,\n      content: parsed.content\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "a922c7db-1b29-4300-9e34-c776386d7d15",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/blogger/v3/blogs/2223986726864721327/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "kind",
+              "value": "blogger#post"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        976,
+        0
+      ],
+      "id": "d16166e7-2ea8-4243-816d-48435a4bdd38",
+      "name": "HTTP Request1",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "po8xK7loRdh1aLeB",
+          "name": "Unnamed credential"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ee80ef62-3db4-44e4-95e6-98a59a291365",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "479d7a293cc897ed1161805a9437245c1dfaea1f4bc7aa34bf69cb4b1a68e407"
+  },
+  "id": "BaBlsEihJhbOTo4m",
+  "tags": []
+}
